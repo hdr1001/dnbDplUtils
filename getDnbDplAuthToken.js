@@ -37,7 +37,7 @@ function updCredentials() {
 try {
    credentials = JSON.parse(fs.readFileSync(fileCredentials));
 }
-catch { //No credentials file available, create
+catch(err) { //No credentials file available, create
    credentials = {
       key: '< Your API key here >',
       secret: '< Your API secret here >'
