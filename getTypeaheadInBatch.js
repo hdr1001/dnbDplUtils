@@ -129,10 +129,11 @@ let arrRanges = [30, 20, 15, 10, 6, 3];
                   })
                };
 
+               //Write the results of the match to a delimited text file
                retWorkList
                   .filter(workItem => workItem.results.done)
                   .forEach(workItem => {
-                     writeTypeaheadInput(workItem.typeahead);
+                     writeTypeaheadInput(workItem.typeahead, delim);
 
                      const oRespTA = JSON.parse(workItem.results.httpResp);
 
@@ -144,13 +145,23 @@ let arrRanges = [30, 20, 15, 10, 6, 3];
                      }
                   })
 
-               if(idx < arrRanges.length - 2) { processWorkList(++idx) }
+               if(idx < arrRanges.length - 2) {
+                  processWorkList(++idx) //Process the next range
+               }
+               else {
+                  //No more typeahead calls, record the unresolved records
+                  workList
+                     .filter(workItem => !workItem.results.done)
+                     .forEach(workItem => {
+                        writeTypeaheadInput(workItem.typeahead, '\n')
+                     })
+               }
             })
       .catch()
 })(0);
 
-function writeTypeaheadInput(typeahead) {
-   wstream.write([typeahead.customerReference, typeahead.searchTerm, typeahead.countryISOAlpha2Code].join(delim) + delim)
+function writeTypeaheadInput(typeahead, termChar) {
+   wstream.write([typeahead.customerReference, typeahead.searchTerm, typeahead.countryISOAlpha2Code].join(delim) + termChar)
 }
 
 function writeTypeaheadOutput(results, oRespTA) {
@@ -165,7 +176,11 @@ function writeTypeaheadOutput(results, oRespTA) {
    arrOut.push(duns);
    arrOut.push(primaryName ? primaryName : '');
 
-   if(tradeStyleNames && tradeStyleNames.length) { arrOut.push(tradeStyleNames[0].name ? tradeStyleNames[0].name : '') }
+   if(tradeStyleNames && tradeStyleNames.length) {
+      arrOut.push(tradeStyleNames[0].name ? tradeStyleNames[0].name : '') }
+   else {
+      arrOut.push('')
+   }
 
    if(primaryAddress) {
       const {streetAddress, addressLocality, postalCode, addressCountry} = primaryAddress;
