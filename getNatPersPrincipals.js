@@ -51,10 +51,10 @@ else {
 }
 
 //D&B Direct+ Data Block REST API call
-function getDnbDplDBs(arrBlockIDs, sTradeUp) {
+function getDnbDplDBs(sDUNS, arrBlockIDs, sTradeUp) {
    const httpAttr = {
       host: 'plus.dnb.com',
-      path: '/v1/data/duns/' + DUNS,
+      path: '/v1/data/duns/' + sDUNS,
       method: 'GET',
       headers: {
          'Content-Type': 'application/json',
@@ -100,30 +100,43 @@ function idNumbersGetDuns(arrIDs) {
    return arrPrincipalDUNS[0].idNumber
 }
 
-getDnbDplDBs(['companyinfo_L2_v1', 'principalscontacts_L3_v1'])
+function processPrincipals(org) {
+   const {mostSeniorPrincipals, currentPrincipals} = org;
+
+   const arrPrincipals = mostSeniorPrincipals.concat(currentPrincipals);
+
+   console.log('Total number of principals = ' + arrPrincipals.length);
+
+   const arrBusinessPrincipals = arrPrincipals.filter(oPincipal => oPincipal.subjectType === 'Businesses')
+
+   console.log('Total number of business principals = ' + arrBusinessPrincipals.length);
+
+   return Promise.all(arrPrincipals
+      .filter(oPincipal => oPincipal.subjectType === 'Businesses')
+      .map(oBusPrincipal => {
+         const principalDUNS = idNumbersGetDuns(oBusPrincipal.idNumbers);
+
+         if(principalDUNS) {
+            console.log('Retrieving principal data for ' + oBusPrincipal.fullName + ' (' + principalDUNS + ')');
+
+            return getDnbDplDBs(principalDUNS, ['principalscontacts_L3_v1']);
+         }
+         else {
+            return Buffer.alloc(0);
+         }
+      })
+   );
+}
+
+getDnbDplDBs(DUNS, ['companyinfo_L2_v1', 'principalscontacts_L3_v1'])
    .then(respBody => {
       const oDBs = JSON.parse(respBody.join(''));
       const oOrg = oDBs.organization;
-      const {mostSeniorPrincipals, currentPrincipals} = oOrg;
 
-      const arrMsp = mostSeniorPrincipals.map(msp => {
-         msp.isMSP = true;
-         return msp;
-      });
-
-      const arrPrincipals = arrMsp.concat(currentPrincipals);
-
-      console.log('Total number of principals = ' + arrPrincipals.length);
-
-      const arrBusinessPrincipals = arrPrincipals.filter(oPincipal => oPincipal.subjectType === 'Businesses')
-
-      if(arrBusinessPrincipals.length) {
-         arrBusinessPrincipals.forEach(oBusPrincipal => {
-            console.log(oBusPrincipal.fullName + ' (' + idNumbersGetDuns(oBusPrincipal.idNumbers) + ')')
-         })     
-      }
-      else {
-         console.log('All principals are natural persons')
-      }
+      processPrincipals(oOrg)
+         .then(values => {
+            values.forEach(respBody => console.log(respBody.join('')))
+         })
+         .catch(err => console.log(err));
    })
    .catch(err => console.log(err));
