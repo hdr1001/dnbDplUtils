@@ -76,7 +76,11 @@ function getDnbDplDBs(sDUNS, arrBlockIDs, sTradeUp) {
 
          resp.on('end', () => { //The match candidates now available
             if(resp.statusCode !== 200) { console.log('HTTP status code ' + resp.statusCode) }
-            resolve(body);
+
+            try {
+               resolve(JSON.parse(body.join('')));
+            }
+            catch(err) { reject(err) }
          });
       }).end()
    })   
@@ -84,7 +88,7 @@ function getDnbDplDBs(sDUNS, arrBlockIDs, sTradeUp) {
 
 function processPrincipals(org) {
    //Determine the DUNS associated with a business principal
-   function idNumbersGetDuns(arrIDs) {
+   function idNumbersGetDUNS(arrIDs) {
       //Check the array passed in
       if(!(arrIDs && arrIDs.length)) {
          console.log('No IDs available!');
@@ -101,73 +105,54 @@ function processPrincipals(org) {
    
       return arrPrincipalDUNS[0].idNumber
    }
-   
-   //Retrieve the principals & contacts data block for a business principal
-   function getPcL3DB(oBusPrincipal) {
-      const principalDUNS = idNumbersGetDuns(oBusPrincipal.idNumbers);
 
-      if(principalDUNS) {
-         console.log('Retrieving principal data for ' + oBusPrincipal.fullName + ' (' + principalDUNS + ')');
+   const arrPrincipals = org.mostSeniorPrincipals.concat(org.currentPrincipals);
 
-         return getDnbDplDBs(principalDUNS, ['principalscontacts_L3_v1']);
-      }
-      else {
-         return Promise.resolve(Buffer.alloc(0));
-      }
-   }
-
-   const {mostSeniorPrincipals, currentPrincipals} = org;
-
-   const arrPrincipals = mostSeniorPrincipals.concat(currentPrincipals);
-
-   console.log('Total number of principals = ' + arrPrincipals.length);
-
-   const arrBusinessPrincipals = arrPrincipals.filter(oPincipal => oPincipal.subjectType === 'Businesses')
-
-   console.log('Total number of business principals = ' + arrBusinessPrincipals.length);
+   console.log('Processing ' + arrPrincipals.length + ' principals for duns ' + org.duns);
 
    return Promise.all(arrPrincipals
-      .filter(oPincipal => oPincipal.subjectType === 'Businesses')
-      .map(oBusPrincipal => {
+      .map(oPrincipal => {
          return new Promise((resolve, reject) => {
-            getPcL3DB(oBusPrincipal)
-               .then(pcL3RespBody => {
-                  let oPcL3DB, oOrg;
+            if(oPrincipal.subjectType !== 'Businesses') {
+               resolve({duns: org.duns, principal: oPrincipal.fullName, status: 'Not a business'});
+               return;
+            }
 
-                  try {
-                     oPcL3DB = JSON.parse(pcL3RespBody.join(''));
-                     oOrg = oPcL3DB.organization;
+            const principalDUNS = idNumbersGetDUNS(oPrincipal.idNumbers);
 
-                     if(!oOrg) { throw new Error('Property organization not available') };
-                  }
-                  catch(err) {
-                     resolve(null);
-                  }
+            if(!principalDUNS) {
+               resolve({duns: org.duns, principal: oPrincipal.fullName, status: 'No DUNS available for this business'});
+               return;
+            }
 
-                  const {principalsSummary, mostSeniorPrincipals, currentPrincipals} = oOrg;
+            getDnbDplDBs(principalDUNS, ['principalscontacts_L3_v1'])
+               .then(dbPcL3 => {
+                  processPrincipals(dbPcL3.organization)
+                     .then(values => {
+                        values.forEach(oRet => console.log(oRet))
 
-                  oBusPrincipal.org = {};
-                  oBusPrincipal.org.principalsSummary = principalsSummary;
-                  oBusPrincipal.org.mostSeniorPrincipals = mostSeniorPrincipals;
-                  oBusPrincipal.org.currentPrincipals = currentPrincipals;
-
-                  resolve(oBusPrincipal)
+                        oPrincipal.org = {};
+                        oPrincipal.org.principalsSummary = dbPcL3.organization.principalsSummary;
+                        oPrincipal.org.mostSeniorPrincipals = dbPcL3.organization.mostSeniorPrincipals;
+                        oPrincipal.org.currentPrincipals = dbPcL3.organization.currentPrincipals;
+      
+                        resolve({duns: org.duns, principal: oPrincipal.fullName, status: 'Recursive request for DUNS ' + principalDUNS})
+                     })
                })
                .catch(err => reject(err));
-            })
+         })
       })
    );
 }
 
 getDnbDplDBs(DUNS, ['companyinfo_L2_v1', 'principalscontacts_L3_v1'])
-   .then(respBody => {
-      const oDBs = JSON.parse(respBody.join(''));
+   .then(oDBs => {
       const oOrg = oDBs.organization;
 
       processPrincipals(oOrg)
          .then(values => {
+            values.forEach(oRet => console.log(oRet))
             console.log(JSON.stringify(oOrg, null, 3));
-            //values.forEach(respBody => console.log(respBody.join('')))
          })
          .catch(err => console.log(err));
    })
