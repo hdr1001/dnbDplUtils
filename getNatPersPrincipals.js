@@ -20,95 +20,38 @@
 //
 // *********************************************************************
 
-//External packages
+//External libraries
 const fs = require('fs');
-const https = require('https');
-const qryStr = require('querystring');
+const path = require('path');
+const lib = require('./dnbDplLib');
 
-const fileCredentials = 'dnbDplCredentials.json';
+//Application settings
+const arrblockIDs = ['companyinfo_L2_v1','principalscontacts_L3_v1','hierarchyconnections_L1_v1'];
+const tradeUp = ''; //Set to hq if trade-up is needed
+const filePathIn = {root: '', dir: 'in', base: 'DUNS.txt'};
+const filePathOut = {root: '', dir: 'out'};
+const fileBase1stPt = 'dnb_dpl_nat_pers_principals_'; //1st part of the output file name
+const sDate = new Date().toISOString().split('T')[0];
 
-//A DUNS must be specified on the command line like "node getNatPersPrincipals 123456789"
-let DUNS;
-
-if(process.argv && process.argv.length > 2) {
-   DUNS = process.argv[2];
-   console.log('Getting (natural person) principals for DUNS ' + DUNS);
-}
-else {
-   console.log('Please specify a valid DUNS on the command line');
-   process.exit();
-}
-
-//Get a (hopefully) valid API token from file dnbDplCredentials.json
-const oCredentials = JSON.parse(fs.readFileSync(fileCredentials));
-
-if(oCredentials && oCredentials.token) {
-   console.log('Token available but please note that it can be expired!')
-}
-else {
-   console.log('Please generate a valid token, exiting ...');
-   process.exit();
-}
-
-//D&B Direct+ Data Block REST API call
-function getDnbDplDBs(sDUNS, arrBlockIDs, sTradeUp) {
-   const httpAttr = {
-      host: 'plus.dnb.com',
-      path: '/v1/data/duns/' + sDUNS,
-      method: 'GET',
-      headers: {
-         'Content-Type': 'application/json',
-         Authorization: 'Bearer ' + oCredentials.token
-      }
-   };
-   
-   const oQryStr = {blockIDs: arrBlockIDs.join(',')};
-   if(sTradeUp) {oQryStr.tradeUp = sTradeUp}
-   httpAttr.path += '?' + qryStr.stringify(oQryStr);
-   
-   return new Promise((resolve, reject) => {
-      https.request(httpAttr, resp => {
-         const body = [];
-
-         resp.on('error', err => reject(err));
-
-         resp.on('data', chunk => body.push(chunk));
-
-         resp.on('end', () => { //The match candidates now available
-            if(resp.statusCode !== 200) { console.log('HTTP status code ' + resp.statusCode) }
-
-            try {
-               resolve(JSON.parse(body.join('')));
-            }
-            catch(err) { reject(err) }
-         });
-      }).end()
-   })   
-}
-
+//Function to recursively resolve principals to natural persons
 function processPrincipals(org) {
    //Determine the DUNS associated with a business principal
    function idNumbersGetDUNS(arrIDs) {
       //Check the array passed in
-      if(!(arrIDs && arrIDs.length)) {
-         console.log('No IDs available!');
-         return '';
-      }
+      if(!(arrIDs && arrIDs.length)) { /* console.log('No IDs available!'); */ return ''; }
    
       //Locate the DUNS in the idNumbers aray
       const arrPrincipalDUNS = arrIDs.filter(oID => oID.idType.dnbCode === 3575)
    
-      if(arrPrincipalDUNS.length === 0) {
-         console.log('No DUNS available!');
-         return '';
-      }
+      if(arrPrincipalDUNS.length === 0) { /* console.log('No DUNS available!'); */ return ''; }
    
       return arrPrincipalDUNS[0].idNumber
    }
 
+   //Concat the principal arrays
    const arrPrincipals = org.mostSeniorPrincipals.concat(org.currentPrincipals);
 
-   console.log('Processing ' + arrPrincipals.length + ' principals for duns ' + org.duns);
+   //console.log('Processing ' + arrPrincipals.length + ' principals for duns ' + org.duns);
 
    return Promise.all(arrPrincipals
       .map(oPrincipal => {
@@ -125,11 +68,11 @@ function processPrincipals(org) {
                return;
             }
 
-            getDnbDplDBs(principalDUNS, ['principalscontacts_L3_v1'])
+            lib.reqDnbDplDBs(principalDUNS, ['principalscontacts_L3_v1'], null, true)
                .then(dbPcL3 => {
                   processPrincipals(dbPcL3.organization)
                      .then(values => {
-                        values.forEach(oRet => console.log(oRet))
+                        //values.forEach(oRet => console.log(oRet))
 
                         oPrincipal.org = {};
                         oPrincipal.org.principalsSummary = dbPcL3.organization.principalsSummary;
@@ -145,15 +88,47 @@ function processPrincipals(org) {
    );
 }
 
-getDnbDplDBs(DUNS, ['companyinfo_L2_v1', 'principalscontacts_L3_v1'])
-   .then(oDBs => {
-      const oOrg = oDBs.organization;
+function processDUNS(DUNS) {
+   lib.reqDnbDplDBs(DUNS, arrblockIDs, null, true)
+      .then(oDBs => {
+         processPrincipals(oDBs.organization)
+            .then(values => {
+               //values.forEach(oRet => console.log(oRet));
+               console.log('Finished processing: ' + oDBs.organization.primaryName + ' ('
+                                  + oDBs.organization.primaryAddress.addressLocality.name + ')');
+               
+               const oFilePath = {...filePathOut};
+               oFilePath.base = fileBase1stPt + DUNS + '_' + sDate + '.json';
 
-      processPrincipals(oOrg)
-         .then(values => {
-            values.forEach(oRet => console.log(oRet))
-            console.log(JSON.stringify(oOrg, null, 3));
-         })
-         .catch(err => console.log(err));
-   })
-   .catch(err => console.log(err));
+               fs.writeFile(path.format(oFilePath), JSON.stringify(oDBs, null, 3), err => {
+                  if(err) { console.log(err.message) }
+               });
+            })
+            .catch(err => console.log(err));
+      })
+      .catch(err => console.log(err));
+}
+
+if(process.argv && process.argv.length > 2) {
+   //Assume DUNS specified on the command line like;
+   //node getNatPersPrincipals 123456789
+   let DUNS = process.argv[2];
+   console.log('Getting (natural person) principals for DUNS ' + DUNS);
+
+   processDUNS(DUNS);
+}
+else {
+   //Read & parse the DUNS to retrieve from the file DUNS.txt
+   const arrDUNS = lib.readDunsFile(filePathIn);
+
+   //Check if there are any valid array entries available
+   if(arrDUNS.length === 0) {
+      console.log('No valid DUNS on input file, exiting ...');
+      process.exit();
+   }
+   else {
+      console.log('Test file contains ' + arrDUNS.length + ' DUNS records');
+   }
+
+   arrDUNS.forEach(DUNS => processDUNS(DUNS));
+}

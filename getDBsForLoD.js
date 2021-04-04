@@ -34,10 +34,7 @@ const fileBase1stPt = 'dnb_dpl_ci_l2_pc_l3_hc_l1_'; //1st part of the output fil
 const sDate = new Date().toISOString().split('T')[0];
 
 //Read & parse the DUNS to retrieve from the file DUNS.txt
-let arrDUNS = fs.readFileSync(path.format(filePathIn)).toString().split('\n');
-arrDUNS = arrDUNS
-   .map(sDUNS => sDUNS.trim()) //Remove any unwanted whitespace
-   .filter(sDUNS => !!sDUNS);  //Remove empty values from the array
+const arrDUNS = lib.readDunsFile(filePathIn);
 
 //Check if there are any valid array entries available
 if(arrDUNS.length === 0) {

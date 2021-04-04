@@ -22,6 +22,7 @@
 
 //External packages
 const fs = require('fs');
+const path = require('path');
 const https = require('https');
 const qryStr = require('querystring');
 
@@ -75,7 +76,7 @@ function reqDnbDplDBs(DUNS, arrBlockIDs, tradeUp, retObj) {
             resp.on('data', chunk => body.push(chunk));
 
             resp.on('end', () => { //The data product is now available in full
-               console.log('Request for DUNS ' + DUNS + ' returned status code ' + resp.statusCode);
+               //console.log('Request for DUNS ' + DUNS + ' returned status code ' + resp.statusCode);
 
                if(retObj) {
                   try {
@@ -92,4 +93,21 @@ function reqDnbDplDBs(DUNS, arrBlockIDs, tradeUp, retObj) {
    });
 }
 
-module.exports = {reqDnbDplDBs};
+function readDunsFile(oFilePath) {
+   let arrDUNS = [];
+
+   try {
+      arrDUNS = fs.readFileSync(path.format(oFilePath)).toString().split('\n');
+   }
+   catch(err) {
+      console.log(err);
+      return arrDUNS;
+   }
+
+   return arrDUNS
+      .map(sDUNS => sDUNS.trim()) //Remove any unwanted whitespace
+      .filter(sDUNS => !!sDUNS)  //Remove empty values from the array
+      .map(sDUNS => '000000000'.slice(0, 9 - sDUNS.length) + sDUNS);
+}
+
+module.exports = {reqDnbDplDBs, readDunsFile};
