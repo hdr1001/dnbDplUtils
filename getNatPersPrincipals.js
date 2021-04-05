@@ -130,5 +130,10 @@ else {
       console.log('Test file contains ' + arrDUNS.length + ' DUNS records');
    }
 
-   arrDUNS.forEach(DUNS => processDUNS(DUNS));
+   console.time('Processed list of DUNS in'); //Start timer
+
+   arrDUNS.forEach(DUNS => processDUNS(DUNS)); //Main loop
+
+   //Provide user feedback about the time it took to process the input file
+   process.on('beforeExit', () => console.timeEnd('Processed list of DUNS in'));
 }
