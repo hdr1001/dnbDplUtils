@@ -22,7 +22,7 @@
 
 //External packages
 const fs = require('fs');
-const https = require('https');
+const lib = require('./dnbDplLib');
 
 const fileCredentials = 'dnbDplCredentials.json';
 
@@ -49,49 +49,19 @@ catch(err) { //No credentials file available, create
    process.exit();
 }
 
-//Request a new access token from the D&B Direct+ API
-function reqDnbDplToken() {
-   const httpAttr = {
-      host: 'plus.dnb.com',
-      path: '/v2/token',
-      method: 'POST',
-      headers: {
-         'Content-Type': 'application/json',
-         Authorization: 'Basic '
-      }
-   };
-
-   let buff = Buffer.from(credentials.key + ':' + credentials.secret);
-   let b64 = buff.toString('Base64');
-   httpAttr.headers.Authorization += b64;
-
-   return new Promise((resolve, reject) => {
-      const httpReq = https.request(httpAttr, resp => {
-         const body = [];
-
-         resp.on('error', err => reject(err));
-
-         resp.on('data', chunk => body.push(chunk));
-
-         resp.on('end', () => { //The data product is now available in full
-            console.log('Token request returned status code ' + resp.statusCode);
-            resolve(body);
-         });
-      });
-
-      httpReq.write('{ "grant_type": "client_credentials" }');
-      
-      httpReq.end();
-   });
+//Base64 encode the D&B Direct+ credentials
+function getBase64EncCredentials() {
+   return Buffer.from(credentials.key + ':' + credentials.secret).toString('Base64');
 }
 
+const httpAttr = {...lib.httpAttrToken};
+httpAttr.headers.Authorization = 'Basic ' + getBase64EncCredentials();
+
 //Get the new token
-reqDnbDplToken()
-   .then(respBody => {
-      let oResp = JSON.parse(respBody.join(''));
+new lib.ReqDnbDpl(httpAttr, null).execReq('Token request', true)
+      .then(oResp => {
+         credentials.token = oResp.access_token;
 
-      credentials.token = oResp.access_token;
-
-      updCredentials() //Write the credentials file including the token
-   })
-   .catch(err => console.log(err));
+         updCredentials() //Write the credentials file including the token
+      })
+      .catch(err => console.log(err));

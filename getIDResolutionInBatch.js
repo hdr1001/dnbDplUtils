@@ -1,7 +1,7 @@
 // *********************************************************************
 //
-// Get D&B Direct+ Data Blocks for a list of DUNS
-// JavaScript code file: getDBsForLoD.js
+// Get D&B Direct+ IDentity Resolution in batch
+// JavaScript code file: getIDResolutionInBatch.js
 //
 // Copyright 2021 Hans de Rooij
 //
@@ -26,15 +26,22 @@ const path = require('path');
 const lib = require('./dnbDplLib');
 
 //Application settings
-const arrBlockIDs = ['companyinfo_L2_v1','hierarchyconnections_L1_v1'];
-const tradeUp = ''; //Set to hq if trade-up is needed
-const filePathIn = {root: '', dir: 'in', base: 'DUNS.txt'};
+const filePathIn = {root: '', dir: 'in', base: 'arrCriteria.json'};
 const filePathOut = {root: '', dir: 'out'};
-const fileBase1stPt = 'dnb_dpl_ci_l2_hc_l1_'; //1st part of the output file name
+const fileBase1stPt = 'IDR_'; //1st part of the output file name
 const sDate = new Date().toISOString().split('T')[0];
 
-//Read & parse the DUNS to retrieve from the file DUNS.txt
-const arrDUNS = lib.readDunsFile(filePathIn);
+//Example input file
+/*
+
+[
+   {"customerReference1": 1, "registrationNumber": ""},
+   {}
+]
+
+*/
+//Read & parse the DUNS to retrieve from the input file
+//const arrCriteria = ;
 
 //Check if there are any valid array entries available
 if(arrDUNS.length === 0) {
@@ -46,13 +53,7 @@ else {
 }
 
 arrDUNS.forEach(DUNS => {
-   const httpAttr = {...lib.httpAttrDBs};
-   httpAttr.path += DUNS;
-
-   const qryStr = {blockIDs: arrBlockIDs.join(',')};
-   if(tradeUp) { qryStr.tradeUp = tradeUp }
-
-   new lib.ReqDnbDpl(httpAttr, qryStr).execReq('Request for DUNS ' + DUNS)
+   lib.reqDnbDplDBs(DUNS, arrblockIDs, tradeUp)
       .then(respBody => {
          //Write the the HTTP response body to a file
          const oFilePath = {...filePathOut};

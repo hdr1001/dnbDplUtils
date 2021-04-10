@@ -39,20 +39,82 @@ const oCredentials = JSON.parse(fs.readFileSync(fileCredentials));
 //Configure the limiter to throttle the number of HTTP requests made
 const limiter = new RateLimiter(maxTPS, 'second');
 
-if(oCredentials && oCredentials.token) {
-   console.log('Token available but please note that it can be expired!')
-}
-else {
-   console.log('Please generate a valid token, exiting ...');
-   process.exit();
+//Default attributes for an HTTP request
+const httpAttrToken = {
+   host: 'plus.dnb.com',
+   path: '/v2/token',
+   method: 'POST',
+   headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Basic '
+   }
 }
 
-//Launch an API request for D&B Direct+ Data blocks
-function reqDnbDplDBs(DUNS, arrBlockIDs, tradeUp, retObj) {
+const httpAttrDBs = {
+   host: 'plus.dnb.com',
+   path: '/v1/data/duns/',
+   method: 'GET',
+   headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer '
+   }
+}
+
+//Object constructor for generic D&B Direct+ request
+function ReqDnbDpl(reqHttpAttr, oQryStr) {
+   this.httpAttr = reqHttpAttr;
+
+   if(oQryStr) {
+      this.httpAttr.path += '?' + qryStr.stringify(oQryStr);
+   }
+
+   if(this.httpAttr.headers.Authorization === 'Bearer ') {
+      this.httpAttr.headers.Authorization += oCredentials.token
+   }
+}
+
+//Execute the HTTP request on the D&B Direct+ request object
+ReqDnbDpl.prototype.execReq = function(reqMsgOnEnd, bRetObj) {
+   //The actual HTTP request wrapped in a promise
+   return new Promise((resolve, reject) => {
+      limiter.removeTokens(1, () => {
+         const httpReq = https.request(this.httpAttr, resp => {
+            const body = [];
+
+            resp.on('error', err => reject(err));
+
+            resp.on('data', chunk => body.push(chunk));
+
+            resp.on('end', () => { //The data product is now available in full
+               if(reqMsgOnEnd) { console.log(reqMsgOnEnd + ' (HTTP status code ' + resp.statusCode + ')') } 
+
+               if(bRetObj) {
+                  try {
+                     resolve(JSON.parse(body.join('')));
+                  }
+                  catch(err) { reject(err) }
+               }
+               else {
+                  resolve(body);
+               }
+            });
+         });
+
+         if(this.httpAttr.method === 'POST') {
+            httpReq.write('{ "grant_type": "client_credentials" }');
+         }
+
+         httpReq.end();
+      })
+   });
+}
+
+//Launch a D&B Direct+ IDentity Resolution request
+function reqDnbDplIDR(oCriteria, retObj) {
    //HTTP request configuration basics
    const httpAttr = {
       host: 'plus.dnb.com',
-      path: '/v1/data/duns/' + DUNS,
+      path: '/v1/match/cleanseMatch',
       method: 'GET',
       headers: {
          'Content-Type': 'application/json',
@@ -60,10 +122,8 @@ function reqDnbDplDBs(DUNS, arrBlockIDs, tradeUp, retObj) {
       }
    };
    
-   //A bit of query string manipulation
-   const oQryStr = {blockIDs: arrBlockIDs.join(',')};
-   if(tradeUp) {oQryStr.tradeUp = tradeUp}
-   httpAttr.path += '?' + qryStr.stringify(oQryStr);
+   //Specify the submitted search criteria in the query string
+   httpAttr.path += '?' + qryStr.stringify(oCriteria);
 
    //The actual HTTP request wrapped in a promise
    return new Promise((resolve, reject) => {
@@ -75,8 +135,8 @@ function reqDnbDplDBs(DUNS, arrBlockIDs, tradeUp, retObj) {
 
             resp.on('data', chunk => body.push(chunk));
 
-            resp.on('end', () => { //The data product is now available in full
-               //console.log('Request for DUNS ' + DUNS + ' returned status code ' + resp.statusCode);
+            resp.on('end', () => { //The match candidates are now available in full
+               console.log('IDR request returned status code ' + resp.statusCode);
 
                if(retObj) {
                   try {
@@ -110,4 +170,4 @@ function readDunsFile(oFilePath) {
       .map(sDUNS => '000000000'.slice(0, 9 - sDUNS.length) + sDUNS);
 }
 
-module.exports = {reqDnbDplDBs, readDunsFile};
+module.exports = {httpAttrToken, httpAttrDBs, ReqDnbDpl, reqDnbDplIDR, readDunsFile};
