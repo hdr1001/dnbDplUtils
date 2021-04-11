@@ -60,6 +60,9 @@ const httpAttrDBs = {
    }
 }
 
+const httpAttrIDR = {...httpAttrDBs};
+httpAttrIDR.path = '/v1/match/cleanseMatch';
+
 //Object constructor for generic D&B Direct+ request
 function ReqDnbDpl(reqHttpAttr, oQryStr) {
    this.httpAttr = reqHttpAttr;
@@ -109,50 +112,6 @@ ReqDnbDpl.prototype.execReq = function(reqMsgOnEnd, bRetObj) {
    });
 }
 
-//Launch a D&B Direct+ IDentity Resolution request
-function reqDnbDplIDR(oCriteria, retObj) {
-   //HTTP request configuration basics
-   const httpAttr = {
-      host: 'plus.dnb.com',
-      path: '/v1/match/cleanseMatch',
-      method: 'GET',
-      headers: {
-         'Content-Type': 'application/json',
-         Authorization: 'Bearer ' + oCredentials.token
-      }
-   };
-   
-   //Specify the submitted search criteria in the query string
-   httpAttr.path += '?' + qryStr.stringify(oCriteria);
-
-   //The actual HTTP request wrapped in a promise
-   return new Promise((resolve, reject) => {
-      limiter.removeTokens(1, () => {
-         https.request(httpAttr, resp => {
-            const body = [];
-
-            resp.on('error', err => reject(err));
-
-            resp.on('data', chunk => body.push(chunk));
-
-            resp.on('end', () => { //The match candidates are now available in full
-               console.log('IDR request returned status code ' + resp.statusCode);
-
-               if(retObj) {
-                  try {
-                     resolve(JSON.parse(body.join('')));
-                  }
-                  catch(err) { reject(err) }
-               }
-               else {
-                  resolve(body);
-               }
-            });
-         }).end()
-      })
-   });
-}
-
 function readDunsFile(oFilePath) {
    let arrDUNS = [];
 
@@ -170,4 +129,4 @@ function readDunsFile(oFilePath) {
       .map(sDUNS => '000000000'.slice(0, 9 - sDUNS.length) + sDUNS);
 }
 
-module.exports = {httpAttrToken, httpAttrDBs, ReqDnbDpl, reqDnbDplIDR, readDunsFile};
+module.exports = {httpAttrToken, httpAttrDBs, httpAttrIDR, ReqDnbDpl, readDunsFile};

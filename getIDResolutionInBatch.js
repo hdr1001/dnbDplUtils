@@ -26,7 +26,7 @@ const path = require('path');
 const lib = require('./dnbDplLib');
 
 //Application settings
-const filePathIn = {root: '', dir: 'in', base: 'arrCriteria.json'};
+const filePathIn = {root: '', dir: 'in', base: 'idrCriteria.json'};
 const filePathOut = {root: '', dir: 'out'};
 const fileBase1stPt = 'IDR_'; //1st part of the output file name
 const sDate = new Date().toISOString().split('T')[0];
@@ -35,31 +35,33 @@ const sDate = new Date().toISOString().split('T')[0];
 /*
 
 [
-   {"customerReference1": 1, "registrationNumber": ""},
+   {"customerReference1": 1, "registrationNumber": "1234...", "countryISOAlpha2Code": "NL" },
+   {"customerReference1": 2, "registrationNumber": "7890...", "countryISOAlpha2Code": "NL" },
    {}
 ]
 
 */
-//Read & parse the DUNS to retrieve from the input file
-//const arrCriteria = ;
+
+//Read & parse the IDentity Resolution search criteria
+const idrCriteria = JSON.parse(fs.readFileSync(path.format(filePathIn)));
 
 //Check if there are any valid array entries available
-if(arrDUNS.length === 0) {
-   console.log('No valid DUNS available, exiting ...');
+if(idrCriteria.length === 0) {
+   console.log('No IDentity Resolution search criteria available, exiting ...');
    process.exit();
 }
 else {
-   console.log('Test file contains ' + arrDUNS.length + ' DUNS records');
+   console.log('Test file contains ' + idrCriteria.length + ' records');
 }
 
-arrDUNS.forEach(DUNS => {
-   lib.reqDnbDplDBs(DUNS, arrblockIDs, tradeUp)
-      .then(respBody => {
+idrCriteria.forEach(oCriteria => {
+   new lib.ReqDnbDpl({...lib.httpAttrIDR}, oCriteria).execReq('IDR request', true)
+      .then(oResp => {
          //Write the the HTTP response body to a file
          const oFilePath = {...filePathOut};
-         oFilePath.base = fileBase1stPt + DUNS + '_' + sDate + '.json';
+         oFilePath.base = fileBase1stPt + oCriteria.customerReference1 + '_' + sDate + '.json';
 
-         fs.writeFile(path.format(oFilePath), respBody, err => {
+         fs.writeFile(path.format(oFilePath), JSON.stringify(oResp, null, 3), err => {
             if(err) { console.log(err.message) }
          });
       })
