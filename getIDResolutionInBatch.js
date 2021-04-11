@@ -55,8 +55,16 @@ else {
 }
 
 idrCriteria.forEach(oCriteria => {
-   new lib.ReqDnbDpl({...lib.httpAttrIDR}, oCriteria).execReq('IDR request', true)
+   new lib.ReqDnbDpl({...lib.httpAttrIDR}, oCriteria).execReq('', true)
       .then(oResp => {
+         let natID = oCriteria.registrationNumber;
+         let org0 = oResp.matchCandidates[0] && oResp.matchCandidates[0].organization;
+
+         if(org0) {
+            console.log('KvK ' + natID.substr(0, 3).concat(' 🕵️.🕵️.🕵️ ') + ' -> ' + 
+                  org0.duns.substr(0, 4).concat(' 🕵️.🕵️.🕵️ ') + ' (' + org0.primaryName + ')')
+         }
+
          //Write the the HTTP response body to a file
          const oFilePath = {...filePathOut};
          oFilePath.base = fileBase1stPt + oCriteria.customerReference1 + '_' + sDate + '.json';
