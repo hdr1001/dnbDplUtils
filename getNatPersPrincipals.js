@@ -26,7 +26,7 @@ const path = require('path');
 const lib = require('./dnbDplLib');
 
 //Application settings
-const arrblockIDs = ['companyinfo_L2_v1','principalscontacts_L3_v1','hierarchyconnections_L1_v1'];
+const arrBlockIDs = ['companyinfo_L2_v1','principalscontacts_L3_v1','hierarchyconnections_L1_v1'];
 const tradeUp = ''; //Set to hq if trade-up is needed
 const filePathIn = {root: '', dir: 'in', base: 'DUNS.txt'};
 const filePathOut = {root: '', dir: 'out'};
@@ -68,7 +68,14 @@ function processPrincipals(org) {
                return;
             }
 
-            lib.reqDnbDplDBs(principalDUNS, ['principalscontacts_L3_v1'], null, true)
+            const httpAttr = {...lib.httpAttrDBs};
+            httpAttr.path += principalDUNS;
+         
+            const qryStr = {blockIDs: 'principalscontacts_L3_v1'};
+            if(tradeUp) { qryStr.tradeUp = tradeUp }
+                  
+            new lib.ReqDnbDpl(httpAttr, qryStr)
+               .execReq('Request for principals DUNS ' + principalDUNS, true)
                .then(dbPcL3 => {
                   processPrincipals(dbPcL3.organization)
                      .then(values => {
@@ -89,7 +96,14 @@ function processPrincipals(org) {
 }
 
 function processDUNS(DUNS) {
-   lib.reqDnbDplDBs(DUNS, arrblockIDs, null, true)
+   const httpAttr = {...lib.httpAttrDBs};
+   httpAttr.path += DUNS;
+
+   const qryStr = {blockIDs: arrBlockIDs.join(',')};
+   if(tradeUp) { qryStr.tradeUp = tradeUp }
+
+   new lib.ReqDnbDpl(httpAttr, qryStr)
+      .execReq('Request for DUNS ' + DUNS, true)
       .then(oDBs => {
          processPrincipals(oDBs.organization)
             .then(values => {
