@@ -27,7 +27,7 @@ const lib = require('./dnbDplLib');
 
 //Application settings
 const arrBlockIDs = ['companyinfo_L2_v1','hierarchyconnections_L1_v1'];
-const tradeUp = ''; //Set to hq if trade-up is needed
+const tradeUp = null; //Set to {tradeUp: 'hq'} if trade-up is needed
 const filePathIn = {root: '', dir: 'in', base: 'DUNS.txt'};
 const filePathOut = {root: '', dir: 'out'};
 const fileBase1stPt = 'dnb_dpl_ci_l2_hc_l1_'; //1st part of the output file name
@@ -46,13 +46,9 @@ else {
 }
 
 arrDUNS.forEach(DUNS => {
-   const httpAttr = {...lib.httpAttrDBs};
-   httpAttr.path += DUNS;
+   const qryStr = {...{ blockIDs: arrBlockIDs.join(',') }, ...tradeUp};
 
-   const qryStr = {blockIDs: arrBlockIDs.join(',')};
-   if(tradeUp) { qryStr.tradeUp = tradeUp }
-
-   new lib.ReqDnbDpl(httpAttr, qryStr).execReq('Request for DUNS ' + DUNS)
+   new lib.ReqDnbDpl(lib.httpBlocks, [DUNS], qryStr).execReq('Request for DUNS ' + DUNS)
       .then(respBody => {
          //Write the the HTTP response body to a file
          const oFilePath = {...filePathOut};

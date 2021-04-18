@@ -22,41 +22,23 @@
 
 //External packages
 const fs = require('fs');
-const https = require('https');
-const qryStr = require('querystring');
 const path = require('path');
-//More on limiter; https://www.npmjs.com/package/limiter
-const RateLimiter = require('limiter').RateLimiter;
+const lib = require('./dnbDplLib');
 
 //Application settings
-const maxTPS = 4; //Maximum transactions per second
-const limiter = new RateLimiter(maxTPS, 'second');
-const fileCredentials = 'dnbDplCredentials.json';
 const filePathIn = {root: '', dir: 'in', base: 'MatchCriteria.txt'};
 const filePathOut = {root: '', dir: 'out'};
 const fileBase1stPt = 'typeahead_results_';
-const delim = '|';
 const sDate = new Date().toISOString().split('T')[0];
-
-//Get a (hopefully) valid API token from file dnbDplCredentials.json
-const oCredentials = JSON.parse(fs.readFileSync(fileCredentials));
-
-if(oCredentials && oCredentials.token) {
-   console.log('Token available but please note that it can be expired!')
-}
-else {
-   console.log('Please generate a valid token, exiting ...');
-   process.exit();
-}
+const delim = '|';
 
 const oPipeDelimPath = {...filePathOut};
 oPipeDelimPath.base = fileBase1stPt + sDate + '.txt';
 const wstream = fs.createWriteStream(path.format(oPipeDelimPath), {flags: 'a', encoding: 'utf8'});
 
 let workList = fs.readFileSync(path.format(filePathIn)).toString().split('\n')
-   .map(elem => elem.split('|'))
+   .map(elem => elem.split(delim))
    .map(criteria => {
-
       return {
          typeahead: {
             searchTerm: criteria[0],
@@ -80,84 +62,69 @@ let arrRanges = [30, 20, 15, 10, 6, 3];
       workList
          .filter(workItem => workItem.typeahead.searchTerm.length > minLen && !workItem.results.done)
          .map(workItem => {
-            const httpAttr = {
-               host: 'plus.dnb.com',
-               path: '/v1/search/typeahead',
-               method: 'GET',
-               headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: 'Bearer ' + oCredentials.token
-               }
-            };
-
-            const qryParameters = {...workItem.typeahead};
-            qryParameters.searchTerm = qryParameters.searchTerm.slice(0, maxLen);
-            httpAttr.path += '?' + qryStr.stringify(qryParameters);
+            const qryStr = {...workItem.typeahead};
+            qryStr.searchTerm = qryStr.searchTerm.slice(0, maxLen);
 
             return new Promise((resolve, reject) => {
-               limiter.removeTokens(1, () => {
-                  https.request(httpAttr, resp => {
-                     const body = [];
-            
-                     resp.on('error', err => reject(err));
-            
-                     resp.on('data', chunk => body.push(chunk));
-            
-                     resp.on('end', () => { //The match candidates now available
-                        workItem.results.httpResp = body;
-                        if(resp.statusCode === 200) { workItem.results.done = true }
-                        workItem.results.httpStatus = resp.statusCode;
-                        workItem.results.maxLen = maxLen;
-
-                        resolve(workItem);
-                     });
-                  }).end()
-               })
-            });
-   })).then(retWorkList => {
-               //Write the the HTTP response body to a file
-               if(filePathOut) {
-                  retWorkList.forEach(workItem => {
-                     if(workItem.results.done) {
-                        const oFilePath = {...filePathOut};
-                        oFilePath.base = fileBase1stPt + workItem.typeahead.customerReference + '_' + workItem.results.maxLen + '_' + sDate + '.json';
-   
-                        fs.writeFile(path.format(oFilePath), workItem.results.httpResp, err => {
-                           if(err) {console.log(err.message)}
-                        });
-                     }
-                  })
-               };
-
-               //Write the results of the match to a delimited text file
-               retWorkList
-                  .filter(workItem => workItem.results.done)
-                  .forEach(workItem => {
-                     writeTypeaheadInput(workItem.typeahead, delim);
-
-                     const oRespTA = JSON.parse(workItem.results.httpResp);
-
-                     if(oRespTA.error || !oRespTA.searchCandidates[0]) {
-                        wstream.write(oRespTA.error.errorCode)
+               new lib.ReqDnbDpl(lib.httpTypeahead, [], qryStr).execReq('Request for name ' + qryStr.searchTerm, true)
+                  .then(oTaResp => {
+                     if(oTaResp.error) {
+                        workItem.results.dplErr = oTaResp.error;
                      }
                      else {
-                        writeTypeaheadOutput(workItem.results, oRespTA)
+                        workItem.results.done = true;
+                        workItem.results.maxLen = maxLen;
+                        workItem.results.oTaResp = oTaResp;
                      }
-                  })
 
-               if(idx < arrRanges.length - 2) {
-                  processWorkList(++idx) //Process the next range
-               }
-               else {
-                  //No more typeahead calls, record the unresolved records
-                  workList
-                     .filter(workItem => !workItem.results.done)
-                     .forEach(workItem => {
-                        writeTypeaheadInput(workItem.typeahead, '\n')
-                     })
-               }
+                     resolve(workItem);
+                  })
+                  .catch(err => {
+                     workItem.results.err = err;
+
+                     reject(workItem);
+                  })
             })
-      .catch()
+         })
+   ).then(retWorkList => {
+      //Write the the HTTP response body to a file
+      if(false) {
+         retWorkList.forEach(workItem => {
+            if(workItem.results.done) {
+               const oFilePath = {...filePathOut};
+               oFilePath.base = fileBase1stPt + workItem.typeahead.customerReference + '_' + workItem.results.maxLen + '_' + sDate + '.json';
+
+               fs.writeFile(path.format(oFilePath), workItem.results.httpResp, err => {
+                  if(err) {console.log(err.message)}
+               });
+            }
+         })
+      }
+
+      //Write the results of the match to a delimited text file
+      retWorkList
+         .filter(workItem => workItem.results.done)
+         .forEach(workItem => {
+            writeTypeaheadInput(workItem.typeahead, delim);
+
+            if(workItem.results.oTaResp) {
+               writeTypeaheadOutput(workItem.results, workItem.results.oTaResp)
+            }
+         })
+
+      if(idx < arrRanges.length - 2) {
+         processWorkList(++idx) //Process the next range
+      }
+      else {
+         //No more typeahead calls, record the unresolved records
+         workList
+            .filter(workItem => !workItem.results.done)
+            .forEach(workItem => {
+               writeTypeaheadInput(workItem.typeahead, '\n')
+            })
+      }
+   })
+   .catch(err => console.log(err))
 })(0);
 
 function writeTypeaheadInput(typeahead, termChar) {
@@ -166,8 +133,6 @@ function writeTypeaheadInput(typeahead, termChar) {
 
 function writeTypeaheadOutput(results, oRespTA) {
    const arrOut = [];
-
-   arrOut.push(results.httpStatus ? results.httpStatus.toString() : '');
 
    const candidate0 = oRespTA.searchCandidates[0];
 

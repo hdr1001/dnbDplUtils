@@ -49,16 +49,8 @@ catch(err) { //No credentials file available, create
    process.exit();
 }
 
-//Base64 encode the D&B Direct+ credentials
-function getBase64EncCredentials() {
-   return Buffer.from(credentials.key + ':' + credentials.secret).toString('Base64');
-}
-
-const httpAttr = {...lib.httpAttrToken};
-httpAttr.headers.Authorization = 'Basic ' + getBase64EncCredentials();
-
 //Get the new token
-new lib.ReqDnbDpl(httpAttr, null).execReq('Token request', true)
+new lib.ReqDnbDpl(lib.httpToken).execReq('Token request', true)
       .then(oResp => {
          credentials.token = oResp.access_token;
 

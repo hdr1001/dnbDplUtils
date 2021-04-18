@@ -55,7 +55,7 @@ else {
 }
 
 idrCriteria.forEach(oCriteria => {
-   new lib.ReqDnbDpl({...lib.httpAttrIDR}, oCriteria).execReq('', true)
+   new lib.ReqDnbDpl(lib.httpIDR, [], oCriteria).execReq('', true)
       .then(oResp => {
          let natID = oCriteria.registrationNumber;
          let org0 = oResp.matchCandidates[0] && oResp.matchCandidates[0].organization;

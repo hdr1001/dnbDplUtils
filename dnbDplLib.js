@@ -39,40 +39,67 @@ const oCredentials = JSON.parse(fs.readFileSync(fileCredentials));
 //Configure the limiter to throttle the number of HTTP requests made
 const limiter = new RateLimiter(maxTPS, 'second');
 
-//Default attributes for an HTTP request
-const httpAttrToken = {
-   host: 'plus.dnb.com',
-   path: '/v2/token',
-   method: 'POST',
-   headers: {
-      'Content-Type': 'application/json',
-      Authorization: 'Basic '
-   }
-}
+//Index values into the HTTP attribute array
+const httpToken = 0;
+const httpBlocks = 1;
+const httpIDR = 2;
+const httpTypeahead = 3;
 
-const httpAttrDBs = {
-   host: 'plus.dnb.com',
-   path: '/v1/data/duns/',
-   method: 'GET',
-   headers: {
-      'Content-Type': 'application/json',
-      Authorization: 'Bearer '
+const arrHttpAttr = [
+   { //Index 0, use httpToken
+      host: 'plus.dnb.com',
+      path: '/v2/token',
+      method: 'POST',
+      headers: {
+         'Content-Type': 'application/json'
+      }
+   },
+   { //Index 1, use httpBlocks
+      host: 'plus.dnb.com',
+      path: '/v1/data/duns',
+      method: 'GET',
+      headers: {
+         'Content-Type': 'application/json'
+      }
+   },
+   { //Index 2, use httpIDR
+      host: 'plus.dnb.com',
+      path: '/v1/match/cleanseMatch',
+      method: 'GET',
+      headers: {
+         'Content-Type': 'application/json'
+      }
+   },
+   { //Index 3, use httpTypeahead
+      host: 'plus.dnb.com',
+      path: '/v1/search/typeahead',
+      method: 'GET',
+      headers: {
+         'Content-Type': 'application/json',
+      }
    }
-}
-
-const httpAttrIDR = {...httpAttrDBs};
-httpAttrIDR.path = '/v1/match/cleanseMatch';
+];
 
 //Object constructor for generic D&B Direct+ request
-function ReqDnbDpl(reqHttpAttr, oQryStr) {
-   this.httpAttr = reqHttpAttr;
-
-   if(oQryStr) {
-      this.httpAttr.path += '?' + qryStr.stringify(oQryStr);
+function ReqDnbDpl(reqType, arrResource, oQryStr) {
+   //Base64 encode the D&B Direct+ credentials
+   function getBase64EncCredentials() {
+      return Buffer.from(oCredentials.key + ':' + oCredentials.secret).toString('Base64');
    }
 
-   if(this.httpAttr.headers.Authorization === 'Bearer ') {
-      this.httpAttr.headers.Authorization += oCredentials.token
+   this.httpAttr = {...arrHttpAttr[reqType]};
+
+   if(arrResource && arrResource.length) {
+      this.httpAttr.path += '/' + arrResource.join('/')
+   };
+
+   if(oQryStr) {this.httpAttr.path += '?' + qryStr.stringify(oQryStr)}
+
+   if(reqType === httpToken) {
+      this.httpAttr.headers.Authorization = 'Basic ' + getBase64EncCredentials()
+   }
+   else {
+      this.httpAttr.headers.Authorization = 'Bearer ' + oCredentials.token
    }
 }
 
@@ -89,7 +116,11 @@ ReqDnbDpl.prototype.execReq = function(reqMsgOnEnd, bRetObj) {
             resp.on('data', chunk => body.push(chunk));
 
             resp.on('end', () => { //The data product is now available in full
-               if(reqMsgOnEnd) { console.log(reqMsgOnEnd + ' (HTTP status code ' + resp.statusCode + ')') } 
+               if(reqMsgOnEnd) { 
+                  console.log(reqMsgOnEnd + ' (HTTP status code ' + resp.statusCode + ')');
+
+                  //if(resp.statusCode !== 200) { console.log(body.join('')) }
+               }
 
                if(bRetObj) {
                   try {
@@ -129,4 +160,4 @@ function readDunsFile(oFilePath) {
       .map(sDUNS => '000000000'.slice(0, 9 - sDUNS.length) + sDUNS);
 }
 
-module.exports = {httpAttrToken, httpAttrDBs, httpAttrIDR, ReqDnbDpl, readDunsFile};
+module.exports = {httpToken, httpBlocks, httpIDR, httpTypeahead, ReqDnbDpl, readDunsFile};
