@@ -26,11 +26,21 @@ const path = require('path');
 const lib = require('./dnbDplLib');
 
 //Application settings
-const arrBlockIDs = ['companyinfo_L2_v1','hierarchyconnections_L1_v1'];
+const arrDBs = [
+   {db: 'companyinfo', dbShort: 'ci', level: 2, version: '1'},
+   {db: 'principalscontacts', dbShort: 'pc', level: 3, version: '1'},
+   {db: 'hierarchyconnections', dbShort: 'hc', level: 1, version: '1'},
+//   {db: 'eventfilings', dbShort: 'ef', level: 1, version: '1'},
+//   {db: 'companyfinancials', dbShort: 'cf', level: 1, version: '1'},
+//   {db: 'financialstrengthinsight', dbShort: 'cf', level: 1, version: '1'},
+//   {db: 'paymentinsight', dbShort: 'pi', level: 1, version: '1'},
+//   {db: 'ownershipinsight', dbShort: 'oi', level: 1, version: '1'}
+]
+const arrBlockIDs = arrDBs.map(oDB => oDB.db + '_L' + oDB.level + '_v' + oDB.version);
 const tradeUp = null; //Set to {tradeUp: 'hq'} if trade-up is needed
 const filePathIn = {root: '', dir: 'in', base: 'DUNS.txt'};
 const filePathOut = {root: '', dir: 'out'};
-const fileBase1stPt = 'dnb_dpl_ci_l2_hc_l1_'; //1st part of the output file name
+const fileBase1stPt = arrDBs.reduce((acc, oDB) => acc + oDB.dbShort + '_l' + oDB.level + '_', 'dnb_dpl_');
 const sDate = new Date().toISOString().split('T')[0];
 
 //Read & parse the DUNS to retrieve from the file DUNS.txt

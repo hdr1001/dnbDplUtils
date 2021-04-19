@@ -32,10 +32,6 @@ const fileBase1stPt = 'typeahead_results_';
 const sDate = new Date().toISOString().split('T')[0];
 const delim = '|';
 
-const oPipeDelimPath = {...filePathOut};
-oPipeDelimPath.base = fileBase1stPt + sDate + '.txt';
-const wstream = fs.createWriteStream(path.format(oPipeDelimPath), {flags: 'a', encoding: 'utf8'});
-
 let workList = fs.readFileSync(path.format(filePathIn)).toString().split('\n')
    .map(elem => elem.split(delim))
    .map(criteria => {
@@ -56,12 +52,15 @@ let arrRanges = [30, 20, 15, 10, 6, 3];
 (function processWorkList(idx) {
    const minLen = idx < arrRanges.length - 1 ? arrRanges[idx + 1] : 0;
    const maxLen = arrRanges[idx];
-   console.log('Range [' + minLen + ', ' + maxLen + ']');
 
    Promise.all(
       workList
          .filter(workItem => workItem.typeahead.searchTerm.length > minLen && !workItem.results.done)
-         .map(workItem => {
+         .map((workItem, idx, thisArr) => {
+            if(idx === 0) {
+               console.log(thisArr.length + ' items in range [' + minLen + ', ' + maxLen + ']');
+            }
+
             const qryStr = {...workItem.typeahead};
             qryStr.searchTerm = qryStr.searchTerm.slice(0, maxLen);
 
@@ -69,7 +68,7 @@ let arrRanges = [30, 20, 15, 10, 6, 3];
                new lib.ReqDnbDpl(lib.httpTypeahead, [], qryStr).execReq('Request for name ' + qryStr.searchTerm, true)
                   .then(oTaResp => {
                      if(oTaResp.error) {
-                        workItem.results.dplErr = oTaResp.error;
+                        workItem.results.error = oTaResp.error;
                      }
                      else {
                         workItem.results.done = true;
@@ -80,64 +79,60 @@ let arrRanges = [30, 20, 15, 10, 6, 3];
                      resolve(workItem);
                   })
                   .catch(err => {
-                     workItem.results.err = err;
+                     workItem.results.error = err;
 
                      reject(workItem);
                   })
             })
          })
-   ).then(retWorkList => {
-      //Write the the HTTP response body to a file
-      if(false) {
-         retWorkList.forEach(workItem => {
-            if(workItem.results.done) {
-               const oFilePath = {...filePathOut};
-               oFilePath.base = fileBase1stPt + workItem.typeahead.customerReference + '_' + workItem.results.maxLen + '_' + sDate + '.json';
-
-               fs.writeFile(path.format(oFilePath), workItem.results.httpResp, err => {
-                  if(err) {console.log(err.message)}
-               });
-            }
-         })
-      }
-
-      //Write the results of the match to a delimited text file
-      retWorkList
-         .filter(workItem => workItem.results.done)
-         .forEach(workItem => {
-            writeTypeaheadInput(workItem.typeahead, delim);
-
-            if(workItem.results.oTaResp) {
-               writeTypeaheadOutput(workItem.results, workItem.results.oTaResp)
-            }
-         })
-
+   ).then(() => {
       if(idx < arrRanges.length - 2) {
          processWorkList(++idx) //Process the next range
       }
       else {
-         //No more typeahead calls, record the unresolved records
-         workList
-            .filter(workItem => !workItem.results.done)
-            .forEach(workItem => {
-               writeTypeaheadInput(workItem.typeahead, '\n')
-            })
+         const oPipeDelimPath = {...filePathOut};
+         oPipeDelimPath.base = fileBase1stPt + sDate + '.txt';
+         const wstream = fs.createWriteStream(path.format(oPipeDelimPath), {flags: 'a', encoding: 'utf8'});
+         let sOut;
+        
+         //No more typeahead calls, write the results to a file
+         workList.forEach(workItem => {
+            sOut = getTypeaheadInput(workItem.typeahead);
+
+            if(workItem.results.done) {
+               sOut += getTypeaheadResults(workItem.results)
+            }
+            else if(workItem.results.error) {
+               if(workItem.results.error.errorCode) {
+                  sOut += workItem.results.error.errorCode
+               }
+               else {
+                  sOut += workItem.results.error.message
+               }
+            }
+            else {
+               sOut += '-1'
+            }
+
+            wstream.write(sOut + '\n');
+         })
       }
    })
    .catch(err => console.log(err))
 })(0);
 
-function writeTypeaheadInput(typeahead, termChar) {
-   wstream.write([typeahead.customerReference, typeahead.searchTerm, typeahead.countryISOAlpha2Code].join(delim) + termChar)
+function getTypeaheadInput(typeahead) {
+   return [typeahead.customerReference, typeahead.searchTerm, typeahead.countryISOAlpha2Code].join(delim) + delim
 }
 
-function writeTypeaheadOutput(results, oRespTA) {
+function getTypeaheadResults(results) {
    const arrOut = [];
 
-   const candidate0 = oRespTA.searchCandidates[0];
+   const candidate0 = results.oTaResp.searchCandidates[0];
 
    const {duns, primaryName, tradeStyleNames, primaryAddress, dunsControlStatus} = candidate0.organization;
 
+   arrOut.push('0'); //No error occurred 
    arrOut.push(duns);
    arrOut.push(primaryName ? primaryName : '');
 
@@ -183,5 +178,5 @@ function writeTypeaheadOutput(results, oRespTA) {
 
    arrOut.push(results.maxLen ? results.maxLen.toString() : '');
 
-   wstream.write(arrOut.join(delim) + '\n');
+   return arrOut.join(delim);
 }
