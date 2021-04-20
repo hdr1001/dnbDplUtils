@@ -27,8 +27,8 @@ const lib = require('./dnbDplLib');
 
 //Application settings
 const arrDBs = [
-   {db: 'companyinfo', dbShort: 'ci', level: 2, version: '1'},
-   {db: 'principalscontacts', dbShort: 'pc', level: 3, version: '1'},
+   {db: 'companyinfo', dbShort: 'ci', level: 1, version: '1'},
+//   {db: 'principalscontacts', dbShort: 'pc', level: 3, version: '1'},
    {db: 'hierarchyconnections', dbShort: 'hc', level: 1, version: '1'},
 //   {db: 'eventfilings', dbShort: 'ef', level: 1, version: '1'},
 //   {db: 'companyfinancials', dbShort: 'cf', level: 1, version: '1'},

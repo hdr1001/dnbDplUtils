@@ -39,6 +39,29 @@ const oCredentials = JSON.parse(fs.readFileSync(fileCredentials));
 //Configure the limiter to throttle the number of HTTP requests made
 const limiter = new RateLimiter(maxTPS, 'second');
 
+//Set boole below to true to log all API responses
+const bLogResp = false;
+
+//Generic function for logging the API response
+function logResp(body, httpStatus) {
+   function uuidv4() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+         var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+         return v.toString(16);
+      });
+   }
+
+   const oLogPath = {
+      root: '',
+      dir: 'out',
+      base: 'status_' + httpStatus + '_' + uuidv4() + '.json'
+   }
+
+   fs.writeFile(path.format(oLogPath), body, err => {
+      if(err) { console.log(err.message) }
+   });
+}
+
 //Index values into the HTTP attribute array
 const httpToken = 0;
 const httpBlocks = 1;
@@ -121,6 +144,8 @@ ReqDnbDpl.prototype.execReq = function(reqMsgOnEnd, bRetObj) {
 
                   //if(resp.statusCode !== 200) { console.log(body.join('')) }
                }
+
+               if(bLogResp) { logResp(body, resp.statusCode) }
 
                if(bRetObj) {
                   try {
