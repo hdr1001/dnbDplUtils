@@ -86,25 +86,6 @@ arrDUNS.forEach(DUNS => {
          }
       })
       .catch(err => console.log(err))
-
-/*
-         let natID = oCriteria.registrationNumber;
-         let org0 = oResp.matchCandidates[0] && oResp.matchCandidates[0].organization;
-
-         if(org0) {
-            console.log('KvK ' + natID.substr(0, 3).concat(' 🕵️.🕵️.🕵️ ') + ' -> ' + 
-                  org0.duns.substr(0, 4).concat(' 🕵️.🕵️.🕵️ ') + ' (' + org0.primaryName + ')')
-         }
-
-         
-         //Write the the HTTP response body to a file
-         const oFilePath = {...filePathOut};
-         oFilePath.base = fileBase1stPt + oCriteria.customerReference1 + '_' + sDate + '.json';
-
-         fs.writeFile(path.format(oFilePath), JSON.stringify(oResp, null, 3), err => {
-            if(err) { console.log(err.message) }
-         });
-      }) */
 });
 
 //Object constructor for LEI request
