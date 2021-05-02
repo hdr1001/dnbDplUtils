@@ -67,40 +67,24 @@ const httpToken = 0;
 const httpBlocks = 1;
 const httpIDR = 2;
 const httpTypeahead = 3;
+const httpRefData = 4;
+const httpRefDataCat = 5;
+
+const httpDnbDpl = {
+   host: 'plus.dnb.com',
+   method: 'GET',
+   headers: {
+      'Content-Type': 'application/json'
+   }
+};
 
 const arrHttpAttr = [
-   { //Index 0, use httpToken
-      host: 'plus.dnb.com',
-      path: '/v2/token',
-      method: 'POST',
-      headers: {
-         'Content-Type': 'application/json'
-      }
-   },
-   { //Index 1, use httpBlocks
-      host: 'plus.dnb.com',
-      path: '/v1/data/duns',
-      method: 'GET',
-      headers: {
-         'Content-Type': 'application/json'
-      }
-   },
-   { //Index 2, use httpIDR
-      host: 'plus.dnb.com',
-      path: '/v1/match/cleanseMatch',
-      method: 'GET',
-      headers: {
-         'Content-Type': 'application/json'
-      }
-   },
-   { //Index 3, use httpTypeahead
-      host: 'plus.dnb.com',
-      path: '/v1/search/typeahead',
-      method: 'GET',
-      headers: {
-         'Content-Type': 'application/json',
-      }
-   }
+   {...httpDnbDpl, ...{method: 'POST', path: '/v2/token'}},
+   {...httpDnbDpl, ...{path: '/v1/data/duns'}},
+   {...httpDnbDpl, ...{path: '/v1/match/cleanseMatch'}},
+   {...httpDnbDpl, ...{path: '/v1/search/typeahead'}},
+   {...httpDnbDpl, ...{path: '/v1/referenceData/categories'}},
+   {...httpDnbDpl, ...{path: '/v1/referenceData/category'}}
 ];
 
 //Object constructor for generic D&B Direct+ request
@@ -185,4 +169,13 @@ function readDunsFile(oFilePath) {
       .map(sDUNS => '000000000'.slice(0, 9 - sDUNS.length) + sDUNS);
 }
 
-module.exports = {httpToken, httpBlocks, httpIDR, httpTypeahead, ReqDnbDpl, readDunsFile};
+module.exports = {
+   httpToken,
+   httpBlocks,
+   httpIDR,
+   httpTypeahead,
+   httpRefData,
+   httpRefDataCat,
+   ReqDnbDpl,
+   readDunsFile
+};
